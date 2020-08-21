@@ -4,6 +4,8 @@
 
 REST interface to LDAP/AD authentication
 
+[DockerHub](https://hub.docker.com/r/evindunn/sleepyldap)
+
 ## Installation
 
 ```bash

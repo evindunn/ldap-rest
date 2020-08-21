@@ -24,7 +24,7 @@ class LdapConnection {
         return this._bind(this.ldapConfig.bindDN, this.ldapConfig.bindPass);
     }
 
-    async searchUser(username: string): Promise<SearchEntry[]> {
+    async searchUser(username: string): Promise<SearchEntry> {
         const filter = `(&(objectClass=User)(${this.ldapConfig.usernameAttr}=${username}))`;
         const resultEmitter: EventEmitter.EventEmitter = (
             await this._search(this.ldapConfig.baseDN, {
@@ -34,7 +34,7 @@ class LdapConnection {
             })
         );
 
-        return new Promise<SearchEntry[]>((resolve, reject) => {
+        return new Promise<SearchEntry>((resolve, reject) => {
             const results = [];
 
             resultEmitter.on("error", (err) => {
@@ -54,6 +54,16 @@ class LdapConnection {
                 }
             });
         });
+    }
+
+    async authUser(dn: string, password: string): Promise<boolean> {
+        try {
+            await this._bind(dn, password);
+            return true;
+        } catch (e) {
+            console.error(`Login error for '${dn}'`);
+            return false;
+        }
     }
 }
 

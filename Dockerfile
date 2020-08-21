@@ -1,7 +1,7 @@
 FROM node:12
 
 ADD . /app
-RUN npm build
+RUN npm i && npm build
 
 FROM node:12
 

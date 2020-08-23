@@ -22,8 +22,14 @@ export class AppController {
         try {
             const ldapConn = await this.ldap.connect(appConfig.ldap);
             const user = await ldapConn.searchUser(username);
-            const success = await ldapConn.authUser(user.dn, password);
-            success ? res.sendStatus(200) : res.sendStatus(403);
+
+            if (user === null) {
+                res.sendStatus(403);
+            }
+            else {
+                const success = await ldapConn.authUser(user.dn, password);
+                success ? res.sendStatus(200) : res.sendStatus(403);
+            }
         }
         catch (e) {
             console.error(e.message);

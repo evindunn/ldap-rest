@@ -4,27 +4,47 @@ import ldap, { SearchEntry } from "ldapjs";
 import { LdapConfig } from "../app-config.service";
 import EventEmitter from "events";
 
+type LdapControls = ldap.Control | ldap.Control[];
+type LdapSearchEmitter = Promise<EventEmitter.EventEmitter>;
+
 class LdapConnection {
-    private readonly ldapClient: ldap.Client;
+    public static LDAP_TIMEOUT = 30;
+
     private readonly ldapConfig: LdapConfig;
-    private readonly _bind;
-    private readonly _search;
+    private ldapClient: ldap.Client;
+    private _bind: (bindDN: string, bindPass: string) => Promise<void>;
+    private _search: (
+        base: string,
+        options: ldap.SearchOptions,
+        controls?: LdapControls
+    ) => LdapSearchEmitter;
 
     constructor(config: LdapConfig) {
         this.ldapConfig = config;
-        this.ldapClient = ldap.createClient({
-            url: this.ldapConfig.uri,
-            tlsOptions: { rejectUnauthorized: config.tlsVerify }
-        });
-        this._bind = util.promisify(this.ldapClient.bind.bind(this.ldapClient))
-        this._search = util.promisify(this.ldapClient.search.bind(this.ldapClient));
     }
 
-    async connect(): Promise<void> {
-        return this._bind(this.ldapConfig.bindDN, this.ldapConfig.bindPass);
+    private async _connect(): Promise<void> {
+        if (!(this.ldapClient && this.ldapClient.connected)) {
+            this.ldapClient = ldap.createClient({
+                url: this.ldapConfig.uri,
+                tlsOptions: { rejectUnauthorized: this.ldapConfig.tlsVerify },
+                idleTimeout: LdapConnection.LDAP_TIMEOUT
+            });
+
+            this._bind = util.promisify(
+                this.ldapClient.bind.bind(this.ldapClient)
+            );
+            this._search = util.promisify(
+                this.ldapClient.search.bind(this.ldapClient)
+            );
+
+            await this._bind(this.ldapConfig.bindDN, this.ldapConfig.bindPass);
+        }
     }
 
     async searchUser(username: string): Promise<SearchEntry> {
+        await this._connect();
+
         const filter = `(&(objectClass=User)(${this.ldapConfig.usernameAttr}=${username}))`;
         const resultEmitter: EventEmitter.EventEmitter = (
             await this._search(this.ldapConfig.baseDN, {
@@ -58,6 +78,7 @@ class LdapConnection {
 
     async authUser(dn: string, password: string): Promise<boolean> {
         try {
+            await this._connect();
             await this._bind(dn, password);
             return true;
         } catch (e) {
@@ -70,8 +91,6 @@ class LdapConnection {
 @Injectable()
 export class LdapService {
     async connect(config: LdapConfig): Promise<LdapConnection> {
-        const ldapConn = new LdapConnection(config);
-        await ldapConn.connect();
-        return ldapConn;
+        return new LdapConnection(config);
     }
 }

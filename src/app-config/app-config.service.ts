@@ -2,6 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 const ENV_APP_PORT = "APP_PORT";
+const ENV_APP_LOG_LEVEL = "APP_LOG_LEVEL";
+
 const ENV_LDAP_URI = "LDAP_URI";
 const ENV_LDAP_BIND_DN = "LDAP_BIND_DN";
 const ENV_LDAP_BIND_PASS = "LDAP_BIND_PASSWORD";
@@ -10,6 +12,8 @@ const ENV_LDAP_TLS_VERIFY = "LDAP_TLS_VERIFY";
 const ENV_LDAP_USERNAME_ATTR = "LDAP_USERNAME_ATTRIBUTE";
 
 const DEFAULT_APP_PORT = "8080";
+const DEFAULT_APP_LOG_LVL = "warn";
+
 const DEFAULT_LDAP_TLS_VERIFY = "true";
 const DEFAULT_LDAP_USERNAME_ATTR = "cn";
 
@@ -25,6 +29,7 @@ export class LdapConfigOptions {
 
 class AppConfigOptions {
     port: () => number;
+    logLevel: () => string;
 }
 
 @Injectable()
@@ -34,7 +39,8 @@ export class AppConfigService {
 
     constructor(private readonly config: ConfigService) {
         this.app = {
-            port: () => parseInt(config.get(ENV_APP_PORT) || DEFAULT_APP_PORT)
+            port: () => parseInt(config.get(ENV_APP_PORT) || DEFAULT_APP_PORT),
+            logLevel: () => config.get(ENV_APP_LOG_LEVEL) || DEFAULT_APP_LOG_LVL
         };
         this.ldap = {
             uri: () => config.get(ENV_LDAP_URI),

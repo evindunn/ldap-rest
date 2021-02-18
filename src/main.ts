@@ -1,16 +1,21 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-
-import dotenv from "dotenv";
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "./app.module";
 import helmet from "helmet";
+import { AppConfigService } from "./app-config/app-config.service";
+import { AppLogger } from "./app-logger";
 
 async function bootstrap() {
-  dotenv.config();
 
-  const app = await NestFactory.create(AppModule);
-  app.use(helmet());
+    const app = await NestFactory.create(AppModule, { logger: false });
+    const appConfig = app.get(AppConfigService);
+    const port = appConfig.app.port();
+    const logger = new AppLogger(appConfig);
 
-  await app.listen(process.env.APP_PORT || 8080);
+    app.useLogger(logger);
+    app.use(helmet());
+
+    logger.log(`Server listening on port ${port}...`, 'Server');
+    await app.listen(port);
 }
 
 bootstrap().catch((e) => {

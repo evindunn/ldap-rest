@@ -29,6 +29,7 @@ $ npm run start:prod
 Required:
 ```
 APP_PORT=8080
+
 LDAP_URI=...
 LDAP_BIND_DN=bindUser@root.domain
 LDAP_BIND_PASSWORD="..."
@@ -40,6 +41,13 @@ LDAP_TLS_VERIFY=true
 # sAMAccountName for AD, cn for LDAP
 LDAP_USERNAME_ATTRIBUTE=sAMAccountName
 ```
+
+To disable color in logs:
+```
+NO_COLOR=true
+```
+
+
 
 ## POST /
 ```

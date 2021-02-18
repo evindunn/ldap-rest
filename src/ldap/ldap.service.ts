@@ -1,71 +1,64 @@
-import { Injectable } from '@nestjs/common';
-import util from "util";
-import ldap, { SearchEntry } from "ldapjs";
-import { LdapConfigOptions } from "../app-config/app-config.service";
+import { Inject, Injectable } from "@nestjs/common";
+import { AppConfigService } from "../app-config/app-config.service";
+import { LDAP_CLIENT_PROVIDER_ID } from "./ldap-client.provider";
+import ldap, {
+    Client as LDAPClient,
+    SearchEntry as LDAPSearchEntry,
+    SearchOptions as LDAPSearchOptions,
+    LDAPResult
+} from "ldapjs";
 import EventEmitter from "events";
+import util from "util";
 
 type LdapControls = ldap.Control | ldap.Control[];
 type LdapSearchEmitter = Promise<EventEmitter.EventEmitter>;
+type LDAPBindMethod = (bindDN: string, bindPass: string) => Promise<void>;
+type LDAPSearchMethod = (
+    base: string,
+    options: LDAPSearchOptions,
+    controls?: LdapControls
+) => LdapSearchEmitter;
 
-class LdapConnection {
-    public static LDAP_TIMEOUT = 30;
+@Injectable()
+export class LDAPService {
+    constructor(
+        @Inject(LDAP_CLIENT_PROVIDER_ID) private readonly ldapClient: LDAPClient,
+        private readonly appConfig: AppConfigService) { }
 
-    private readonly ldapConfig: LdapConfigOptions;
-    private ldapClient: ldap.Client;
-    private _bind: (bindDN: string, bindPass: string) => Promise<void>;
-    private _search: (
-        base: string,
-        options: ldap.SearchOptions,
-        controls?: LdapControls
-    ) => LdapSearchEmitter;
-
-    constructor(config: LdapConfigOptions) {
-        this.ldapConfig = config;
-    }
-
-    private async _connect(): Promise<void> {
-        if (!(this.ldapClient && this.ldapClient.connected)) {
-            this.ldapClient = ldap.createClient({
-                url: this.ldapConfig.uri(),
-                tlsOptions: { rejectUnauthorized: this.ldapConfig.tlsVerify },
-                idleTimeout: LdapConnection.LDAP_TIMEOUT
-            });
-
-            this._bind = util.promisify(
-                this.ldapClient.bind.bind(this.ldapClient)
-            );
-            this._search = util.promisify(
-                this.ldapClient.search.bind(this.ldapClient)
-            );
-
-            await this._bind(this.ldapConfig.bindDN(), this.ldapConfig.bindPass());
+    async authUser(dn: string, password: string): Promise<boolean> {
+        try {
+            await this.connect();
+            await this.bind(dn, password);
+            return true;
+        } catch (e) {
+            return false;
         }
     }
 
-    async searchUser(username: string): Promise<SearchEntry> {
-        await this._connect();
+    async findUser(username: string): Promise<LDAPSearchEntry> {
+        await this.connect();
 
-        const filter = `(&(objectClass=User)(${this.ldapConfig.usernameAttr}=${username}))`;
+        const filter = `(&(objectClass=User)(${this.appConfig.ldap.usernameAttr()}=${username}))`;
         const resultEmitter: EventEmitter.EventEmitter = (
-            await this._search(this.ldapConfig.baseDN(), {
+            await this.search(this.appConfig.ldap.baseDN(), {
                 filter,
                 scope: "sub",
                 attributes: ["dn"]
             })
         );
 
-        return new Promise<SearchEntry>((resolve, reject) => {
+        return new Promise<LDAPSearchEntry>((resolve, reject) => {
             const results = [];
 
             resultEmitter.on("error", (err) => {
                 reject(err);
             });
 
-            resultEmitter.on("searchEntry", (entry: ldap.SearchEntry) => {
+            resultEmitter.on("searchEntry", (entry: LDAPSearchEntry) => {
                 results.push(entry.object);
             });
 
-            resultEmitter.on("end", (result: ldap.LDAPResult) => {
+            resultEmitter.on("end", (result: LDAPResult) => {
                 if (result.status !== 0) {
                     reject(result.status);
                 }
@@ -76,21 +69,18 @@ class LdapConnection {
         });
     }
 
-    async authUser(dn: string, password: string): Promise<boolean> {
-        try {
-            await this._connect();
-            await this._bind(dn, password);
-            return true;
-        } catch (e) {
-            console.error(`Login error for '${dn}'`);
-            return false;
-        }
+    private async connect(): Promise<void> {
+        await this.bind(
+            this.appConfig.ldap.bindDN(),
+            this.appConfig.ldap.bindPass()
+        );
     }
-}
 
-@Injectable()
-export class LdapService {
-    async connect(config: LdapConfigOptions): Promise<LdapConnection> {
-        return new LdapConnection(config);
-    }
+    private bind: LDAPBindMethod = util.promisify(
+        this.ldapClient.bind.bind(this.ldapClient)
+    );
+
+    private search: LDAPSearchMethod = util.promisify(
+        this.ldapClient.search.bind(this.ldapClient)
+    );
 }

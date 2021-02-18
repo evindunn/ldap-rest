@@ -1,38 +1,37 @@
-import { Body, Controller, Post, Res } from "@nestjs/common";
-import { AppConfigService } from "./app-config/app-config.service";
-import { LdapService } from "./ldap/ldap.service";
-import Express from "express";
+import {
+    Body,
+    Controller,
+    ForbiddenException,
+    Post,
+    HttpStatus, HttpCode, Logger,
+} from "@nestjs/common";
+import { LDAPService } from "./ldap/ldap.service";
 
 @Controller()
 export class AppController {
-    constructor(
-        private readonly appConfig: AppConfigService,
-        private readonly ldap: LdapService
-    ) {}
+    private logger = new Logger(AppController.name);
+
+    constructor(private readonly ldap: LDAPService) {}
 
     @Post()
+    @HttpCode(HttpStatus.OK)
     async checkUser(
         @Body("username") username: string,
-        @Body("password") password: string,
-        @Res() res: Express.Response): Promise<void> {
+        @Body("password") password: string): Promise<void> {
 
-        try {
-            const ldapConn = await this.ldap.connect(this.appConfig.ldap);
-            const user = await ldapConn.searchUser(username);
+        const user = await this.ldap.findUser(username);
 
-            if (user === null) {
-                res.sendStatus(403);
-            }
-            else {
-                const success = await ldapConn.authUser(user.dn, password);
-                success ? res.sendStatus(200) : res.sendStatus(403);
-            }
+        if (user === null) {
+            this.logger.debug(`User '${username}' not found`);
+            throw new ForbiddenException();
         }
-        catch (e) {
-            console.error(e.message);
-            console.log(this.appConfig.ldap);
-            res.status(500);
-            res.json({ message: e.message.trim() });
+        else {
+            const success = await this.ldap.authUser(user.dn, password);
+            if (!success) {
+                this.logger.debug(`Auth failed for user '${username}'`);
+                throw new ForbiddenException();
+            }
+            this.logger.debug(`Successful login for user '${username}'`)
         }
     }
 }

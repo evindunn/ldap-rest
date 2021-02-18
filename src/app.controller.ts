@@ -1,5 +1,5 @@
 import { Body, Controller, Post, Res } from "@nestjs/common";
-import { AppConfigService } from "./app-config.service";
+import { AppConfigService } from "./app-config/app-config.service";
 import { LdapService } from "./ldap/ldap.service";
 import Express from "express";
 
@@ -16,11 +16,8 @@ export class AppController {
         @Body("password") password: string,
         @Res() res: Express.Response): Promise<void> {
 
-        this.appConfig.reload();
-        const appConfig = this.appConfig.getConfig();
-
         try {
-            const ldapConn = await this.ldap.connect(appConfig.ldap);
+            const ldapConn = await this.ldap.connect(this.appConfig.ldap);
             const user = await ldapConn.searchUser(username);
 
             if (user === null) {
@@ -33,7 +30,7 @@ export class AppController {
         }
         catch (e) {
             console.error(e.message);
-            console.log(appConfig.ldap);
+            console.log(this.appConfig.ldap);
             res.status(500);
             res.json({ message: e.message.trim() });
         }

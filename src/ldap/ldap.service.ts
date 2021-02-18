@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import util from "util";
 import ldap, { SearchEntry } from "ldapjs";
-import { LdapConfig } from "../app-config.service";
+import { LdapConfigOptions } from "../app-config/app-config.service";
 import EventEmitter from "events";
 
 type LdapControls = ldap.Control | ldap.Control[];
@@ -10,7 +10,7 @@ type LdapSearchEmitter = Promise<EventEmitter.EventEmitter>;
 class LdapConnection {
     public static LDAP_TIMEOUT = 30;
 
-    private readonly ldapConfig: LdapConfig;
+    private readonly ldapConfig: LdapConfigOptions;
     private ldapClient: ldap.Client;
     private _bind: (bindDN: string, bindPass: string) => Promise<void>;
     private _search: (
@@ -19,14 +19,14 @@ class LdapConnection {
         controls?: LdapControls
     ) => LdapSearchEmitter;
 
-    constructor(config: LdapConfig) {
+    constructor(config: LdapConfigOptions) {
         this.ldapConfig = config;
     }
 
     private async _connect(): Promise<void> {
         if (!(this.ldapClient && this.ldapClient.connected)) {
             this.ldapClient = ldap.createClient({
-                url: this.ldapConfig.uri,
+                url: this.ldapConfig.uri(),
                 tlsOptions: { rejectUnauthorized: this.ldapConfig.tlsVerify },
                 idleTimeout: LdapConnection.LDAP_TIMEOUT
             });
@@ -38,7 +38,7 @@ class LdapConnection {
                 this.ldapClient.search.bind(this.ldapClient)
             );
 
-            await this._bind(this.ldapConfig.bindDN, this.ldapConfig.bindPass);
+            await this._bind(this.ldapConfig.bindDN(), this.ldapConfig.bindPass());
         }
     }
 
@@ -47,7 +47,7 @@ class LdapConnection {
 
         const filter = `(&(objectClass=User)(${this.ldapConfig.usernameAttr}=${username}))`;
         const resultEmitter: EventEmitter.EventEmitter = (
-            await this._search(this.ldapConfig.baseDN, {
+            await this._search(this.ldapConfig.baseDN(), {
                 filter,
                 scope: "sub",
                 attributes: ["dn"]
@@ -90,7 +90,7 @@ class LdapConnection {
 
 @Injectable()
 export class LdapService {
-    async connect(config: LdapConfig): Promise<LdapConnection> {
+    async connect(config: LdapConfigOptions): Promise<LdapConnection> {
         return new LdapConnection(config);
     }
 }

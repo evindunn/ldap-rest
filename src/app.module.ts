@@ -1,13 +1,16 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { AppConfigService } from './app-config.service';
 import { LdapModule } from './ldap/ldap.module';
 import { LdapService } from "./ldap/ldap.service";
+import { AppConfigModule } from './app-config/app-config.module';
 
 @Module({
-  imports: [LdapModule],
+  imports: [
+      AppConfigModule,
+      LdapModule,
+      AppConfigModule
+  ],
   controllers: [AppController],
-  providers: [AppConfigService, LdapService],
+  providers: [LdapService],
 })
-export class AppModule {
-}
+export class AppModule { }
